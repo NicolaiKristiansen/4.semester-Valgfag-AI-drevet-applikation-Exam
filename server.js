@@ -6,9 +6,10 @@ import { fileURLToPath } from 'node:url'
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const distDir = path.join(__dirname, 'dist')
+const instructionsDir = path.join(__dirname, 'src', 'instructions')
 const port = Number(process.env.PORT || 3000)
-const difyApiKey = process.env.DIFY_API_KEY
-const difyUser = process.env.DIFY_USER || 'customer-service-web'
+const geminiApiKey = process.env.GEMINI_API_KEY
+const geminiModel = process.env.GEMINI_MODEL || 'gemini-2.5-flash'
 
 const contentTypes = {
   '.html': 'text/html; charset=utf-8',
@@ -40,25 +41,25 @@ async function readRequestBody(req) {
   return rawBody ? JSON.parse(rawBody) : {}
 }
 
-function extractWorkflowResult(data) {
-  const outputs =
-    data?.data?.outputs ??
-    data?.outputs ??
-    {}
+async function readInstructionFile(fileName) {
+  const filePath = path.join(instructionsDir, fileName)
+  return fs.readFile(filePath, 'utf8')
+}
 
-  if (typeof outputs.result === 'string' && outputs.result.trim()) {
-    return outputs.result
-  }
+function extractGeminiText(data) {
+  const candidates = Array.isArray(data?.candidates) ? data.candidates : []
 
-  if (typeof outputs.result_text === 'string' && outputs.result_text.trim()) {
-    return outputs.result_text
-  }
+  for (const candidate of candidates) {
+    const parts = candidate?.content?.parts
+    if (!Array.isArray(parts)) continue
 
-  const outputValues = Object.values(outputs)
+    const text = parts
+      .map((part) => (typeof part?.text === 'string' ? part.text : ''))
+      .filter(Boolean)
+      .join('')
 
-  for (const value of outputValues) {
-    if (typeof value === 'string' && value.trim()) {
-      return value
+    if (text.trim()) {
+      return text
     }
   }
 
@@ -66,9 +67,9 @@ function extractWorkflowResult(data) {
 }
 
 async function handleApiAsk(req, res) {
-  if (!difyApiKey) {
+  if (!geminiApiKey) {
     return sendJson(res, 500, {
-      error: 'Missing DIFY_API_KEY on the server.',
+      error: 'Missing GEMINI_API_KEY on the server.',
     })
   }
 
@@ -82,31 +83,72 @@ async function handleApiAsk(req, res) {
       })
     }
 
-    const response = await fetch('https://api.dify.ai/v1/workflows/run', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${difyApiKey}`,
-      },
-      body: JSON.stringify({
-        inputs: {
-          customer_message: customerMessage,
+    const [aiInstructions, priceChart] = await Promise.all([
+      readInstructionFile('AI_Instructions.md'),
+      readInstructionFile('Test_PriceChart.md'),
+    ])
+
+    const systemInstruction = [
+      aiInstructions.trim(),
+      '',
+      'Kontekst fra prisoversigt:',
+      priceChart.trim(),
+    ].join('\n')
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${geminiModel}:generateContent`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': geminiApiKey,
         },
-        response_mode: 'blocking',
-        user: difyUser,
-      }),
-    })
+        body: JSON.stringify({
+          system_instruction: {
+            parts: [
+              {
+                text: systemInstruction,
+              },
+            ],
+          },
+          contents: [
+            {
+              role: 'user',
+              parts: [
+                {
+                  text: `Kundens besked:\n${customerMessage}`,
+                },
+              ],
+            },
+          ],
+          generationConfig: {
+            temperature: 0.4,
+            topP: 0.95,
+            topK: 40,
+            maxOutputTokens: 1024,
+            responseMimeType: 'text/plain',
+          },
+        }),
+      }
+    )
 
     if (!response.ok) {
       const errorText = await response.text()
+      console.error('Gemini request failed:', response.status, errorText)
       return sendJson(res, response.status, {
-        error: 'Dify request failed.',
+        error: 'Gemini request failed.',
         details: errorText,
       })
     }
 
     const data = await response.json()
-    const result = extractWorkflowResult(data)
+    const result = extractGeminiText(data)
+
+    if (!result) {
+      return sendJson(res, 500, {
+        error: 'Gemini returned no text output.',
+      })
+    }
 
     return sendJson(res, 200, { result })
   } catch (error) {

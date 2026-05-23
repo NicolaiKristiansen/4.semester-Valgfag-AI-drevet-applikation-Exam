@@ -7,7 +7,7 @@ services:
     startCommand: npm start
     autoDeploy: true
     envVars:
-      - key: DIFY_API_KEY
+      - key: GEMINI_API_KEY
         sync: false
-      - key: DIFY_USER
-        value: customer-service-web
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash
