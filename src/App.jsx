@@ -1,10 +1,6 @@
 import { useState } from 'react'
 import './App.css'
 
-const DIFY_API_URL = import.meta.env.VITE_DIFY_API_URL || 'https://api.dify.ai/v1/workflows/run'
-const DIFY_API_KEY = import.meta.env.VITE_DIFY_API_KEY
-const DIFY_USER = import.meta.env.VITE_DIFY_USER || 'local-dev-user'
-
 function App() {
   const [customerQuestion, setCustomerQuestion] = useState('')
   const [aiResponse, setAiResponse] = useState('')
@@ -21,48 +17,32 @@ function App() {
       return
     }
 
-    if (!DIFY_API_KEY) {
-      setError('Manglende VITE_DIFY_API_KEY i miljøvariablerne.')
-      return
-    }
-
     setLoading(true)
 
     try {
-      const response = await fetch(DIFY_API_URL, {
+      const response = await fetch('/api/ask', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${DIFY_API_KEY}`,
         },
         body: JSON.stringify({
-          inputs: {
-            customer_message: customerQuestion,
-          },
-          response_mode: 'blocking',
-          user: DIFY_USER,
+          customerMessage: customerQuestion,
         }),
       })
 
+      const data = await response.json().catch(() => ({}))
+
       if (!response.ok) {
-        throw new Error(`Dify request failed with status ${response.status}`)
+        throw new Error(data?.error || `Request failed with status ${response.status}`)
       }
 
-      const data = await response.json()
-      const result =
-        data?.data?.outputs?.result ??
-        data?.data?.outputs?.result_text ??
-        data?.outputs?.result ??
-        data?.outputs?.result_text ??
-        ''
-
-      if (!result) {
+      if (!data?.result) {
         throw new Error('Workflow returned no result output.')
       }
 
-      setAiResponse(result)
+      setAiResponse(data.result)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Something went wrong.')
+      setError(err instanceof Error ? err.message : 'Noget gik galt.')
     } finally {
       setLoading(false)
     }
