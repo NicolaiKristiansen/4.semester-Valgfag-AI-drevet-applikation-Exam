@@ -93,6 +93,12 @@ async function handleApiAsk(req, res) {
       '',
       'Kontekst fra prisoversigt:',
       priceChart.trim(),
+      '',
+      'Vigtig output-regel:',
+      'Besvar alle relevante spørgsmål i kundens besked, også hvis der er mange punkter.',
+      'Stop ikke efter det første prispunkt.',
+      'Skriv svaret som én sammenhængende e-mail med en kort hilsen, en tydelig gennemgang af alle punkter og en afsluttende hilsen.',
+      'Hvis et punkt ikke findes i prisoversigten, brug fallback-teksten for netop det punkt og fortsæt med de øvrige punkter.',
     ].join('\n')
 
     const response = await fetch(
@@ -122,10 +128,10 @@ async function handleApiAsk(req, res) {
             },
           ],
           generationConfig: {
-            temperature: 0.4,
+            temperature: 0.2,
             topP: 0.95,
             topK: 40,
-            maxOutputTokens: 1024,
+            maxOutputTokens: 2048,
             responseMimeType: 'text/plain',
           },
         }),
