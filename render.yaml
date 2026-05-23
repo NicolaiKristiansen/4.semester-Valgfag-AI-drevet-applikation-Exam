@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: exam-project
+    env: node
+    plan: free
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    autoDeploy: true
+    envVars:
+      - key: DIFY_API_KEY
+        sync: false
+      - key: DIFY_USER
+        value: customer-service-web
