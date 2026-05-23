@@ -40,6 +40,31 @@ async function readRequestBody(req) {
   return rawBody ? JSON.parse(rawBody) : {}
 }
 
+function extractWorkflowResult(data) {
+  const outputs =
+    data?.data?.outputs ??
+    data?.outputs ??
+    {}
+
+  if (typeof outputs.result === 'string' && outputs.result.trim()) {
+    return outputs.result
+  }
+
+  if (typeof outputs.result_text === 'string' && outputs.result_text.trim()) {
+    return outputs.result_text
+  }
+
+  const outputValues = Object.values(outputs)
+
+  for (const value of outputValues) {
+    if (typeof value === 'string' && value.trim()) {
+      return value
+    }
+  }
+
+  return ''
+}
+
 async function handleApiAsk(req, res) {
   if (!difyApiKey) {
     return sendJson(res, 500, {
@@ -81,12 +106,7 @@ async function handleApiAsk(req, res) {
     }
 
     const data = await response.json()
-    const result =
-      data?.data?.outputs?.result ??
-      data?.data?.outputs?.result_text ??
-      data?.outputs?.result ??
-      data?.outputs?.result_text ??
-      ''
+    const result = extractWorkflowResult(data)
 
     return sendJson(res, 200, { result })
   } catch (error) {
