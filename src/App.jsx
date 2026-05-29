@@ -87,7 +87,7 @@ function App() {
           />
 
           <div className="form-row">
-            <p className="helper-text">Svarene bliver genereret ud fra din Dify-workflow og prisoversigten.</p>
+            <p className="helper-text">Svarene bliver genereret ud fra Google Gemini og filerne prislisten og AI-instruktioner.</p>
             <button type="submit" disabled={loading}>
               {loading ? 'Sender...' : 'Send til AI'}
             </button>
